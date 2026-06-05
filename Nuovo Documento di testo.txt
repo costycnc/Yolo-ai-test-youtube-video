@@ -1,0 +1,190 @@
+Per leggere un flusso video direttamente da YouTube senza dover scaricare prima il file sul computer, puoi usare la libreria cap_from_youtube. È la soluzione più stabile e pulita per integrare YouTube con OpenCV.
+## 1. Installa la libreria richiesta
+Prima di lanciare il codice, installa questo pacchetto nel tuo ambiente Python eseguendo nel terminale:
+
+pip install cap-from-youtube
+
+## 2. Il codice aggiornato
+Ecco lo script modificato. Ti basta sostituire il link della variabile url_youtube con quello del video che preferisci.
+
+import cv2import osfrom ultralytics import YOLO# Importiamo lo strumento specifico per i video di YouTubefrom cap_from_youtube import cap_from_youtube
+# Percorso assoluto verso il file sul tuo PCpeso_path = r"c:\test\robot_project\yolov8n.pt"
+# Controllo preventivo dell'esistenza del file pesoif not os.path.exists(peso_path):
+    print(f"Errore: il file {peso_path} non esiste!")
+    exit()
+try:
+    # Caricamento del modello YOLOv8
+    modello = YOLO(peso_path)
+    print("Modello caricato con successo!")except Exception as e:
+    print(f"Errore nel caricamento di YOLO: {e}")
+    exit()
+# Nomi delle classi predefinite di YOLOclassi_nomi = modello.names
+# INSERISCI QUI IL LINK DEL VIDEO DI YOUTUBE CHE VUOI USAREurl_youtube = "https://youtube.com"
+
+print("Apertura del flusso video da YouTube...")# '1080p' o '720p' definiscono la risoluzione massima da catturarecap = cap_from_youtube(url_youtube, '720p')
+
+print("Test visivo avviato. Premi 'q' sulla finestra del video per chiudere.")
+while cap.isopened():
+    success, frame = cap.read()
+    if not success:
+        print("Fine del video o errore nel flusso.")
+        break
+
+    # Ridimensioniamo il frame se è troppo grande per lo schermo (opzionale)
+    # frame = cv2.resize(frame, (854, 480))
+    
+    altezza, larghezza, _ = frame.shape
+    
+    # Esegui l'inferenza di YOLO
+    risultati = modello(frame, conf=0.4, verbose=False)
+    
+    # Dizionario per contare gli oggetti nel frame corrente
+    oggetti_rilevati = {}
+
+    for r in risultati:
+        if r.boxes is not None and len(r.boxes) > 0:
+            for box in r.boxes:
+                cls_id = int(box.cls.item())
+                nome_classe = classi_nomi.get(cls_id, f"ID {cls_id}")
+
+                # Aggiorna il conteggio
+                oggetti_rilevati[nome_classe] = oggetti_rilevati.get(nome_classe, 0) + 1
+
+                # Coordinate del riquadro
+                x1, y1, x2, y2 = map(int, box.xyxy.tolist())
+                
+                # Disegna il box e il nome dell'oggetto
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                cv2.putText(frame, nome_classe, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+    # Costruisce il testo riassuntivo per la banda inferiore
+    testo_riassunto = "Rilevati: "
+    if oggetti_rilevati:
+        elementi = [f"{v} {k}" for k, v in oggetti_rilevati.items()]
+        testo_riassunto += ", ".join(elementi)
+    else:
+        testo_riassunto += "Nessun oggetto"
+
+    # Crea la banda nera sul fondo del frame
+    cv2.rectangle(frame, (0, altezza - 40), (larghezza, altezza), (0, 0, 0), -1)
+    
+    # Scrive l'elenco degli oggetti sopra la banda nera
+    cv2.putText(frame, testo_riassunto, (10, altezza - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+    # Mostra il video elaborato
+    cv2.imshow("Rilevamento YOLO - YouTube", frame)
+
+    # Chiude la finestra premendo 'q'
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
+
+## Note utili:
+
+* Se il video va a scatti, puoi cambiare la risoluzione dentro la funzione passando da '720p' a '480p', alleggerendo il carico sulla rete e sul processore.
+* Assicurati di avere una connessione internet attiva, poiché il video viene letto in streaming frame dopo frame.
+
+Vuoi che il codice salvi anche le statistiche degli oggetti rilevati in un file di testo separato mentre scorre il video?
+
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+Sì, si può fare benissimo! Per stampare i frame elaborati e gli oggetti rilevati direttamente nella finestra di DOS (il terminale), basta aggiungere un contatore dei frame e un comando print() all'interno del ciclo while.
+Ecco il codice aggiornato: ora vedrai scorrere nel terminale una riga per ogni frame, esattamente come nello screenshot che avevi inviato all'inizio (es. Frame #42: Rilevati: 2 persons, 1 car).
+
+import cv2import osfrom ultralytics import YOLOimport yt_dlp
+# Percorso assoluto verso il file sul tuo PCpeso_path = r"c:\test\robot_project\yolov8n.pt"
+if not os.path.exists(peso_path):
+    print(f"Errore: il file {peso_path} non esiste!")
+    exit()
+try:
+    modello = YOLO(peso_path)
+    print("Modello caricato con successo!")except Exception as e:
+    print(f"Errore nel caricamento di YOLO: {e}")
+    exit()
+classi_nomi = modello.names
+# Il tuo link YouTube Shorts funzionanteurl_youtube = "https://www.youtube.com/shorts/jOkXxxCrR8Y"video_locale = r"c:\test\youtube\video_temp.mp4"
+# Configurazione del download sicuro tramite yt-dlpydl_opts = {
+    'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+    'outtmpl': video_locale,
+    'overwrites': True,
+    'quiet': True
+}
+
+print("Download del video da YouTube in corso...")try:
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url_youtube])
+    print("Download completato con successo!")except Exception as e:
+    print(f"Errore durante il download del video: {e}")
+    exit()
+# Apriamo il file locale appena scaricatocap = cv2.VideoCapture(video_locale)
+print("Test visivo avviato. Premi 'q' sulla finestra del video per chiudere.")
+# Inizializziamo il contatore dei framecontatore_frame = 0
+while cap.isOpened():
+    success, frame = cap.read()
+    if not success:
+        break
+
+    contatore_frame += 1
+    altezza, larghezza, _ = frame.shape
+    
+    # Eseguiamo l'inferenza
+    risultati = modello(frame, conf=0.4, verbose=False)
+    oggetti_rilevati = {}
+
+    for r in risultati:
+        if r.boxes is not None and len(r.boxes) > 0:
+            for box in r.boxes:
+                cls_id = int(box.cls.item())
+                nome_classe = classi_nomi.get(cls_id, f"ID {cls_id}")
+                oggetti_rilevati[nome_classe] = oggetti_rilevati.get(nome_classe, 0) + 1
+
+                # Estrazione coordinate
+                coordinate = box.xyxy[0].tolist()
+                x1, y1, x2, y2 = map(int, coordinate)
+                
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                cv2.putText(frame, nome_classe, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+    # Costruzione della stringa di riepilogo
+    if oggetti_rilevati:
+        elementi = [f"{v} {k}" for k, v in oggetti_rilevati.items()]
+        testo_oggetti = ", ".join(elementi)
+    else:
+        testo_oggetti = "Nessun oggetto"
+
+    # NUOVA FUNZIONALITÀ: Stampa in tempo reale nella finestra di DOS (Terminale)
+    print(f"Frame #{contatore_frame}: Rilevati -> {testo_oggetti}")
+
+    # Barra nera inferiore sulla finestra video
+    testo_riassunto = f"Rilevati: {testo_oggetti}"
+    cv2.rectangle(frame, (0, altezza - 40), (larghezza, altezza), (0, 0, 0), -1)
+    cv2.putText(frame, testo_riassunto, (10, altezza - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+    cv2.imshow("Rilevamento YOLO - Video Locale", frame)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
+# Rimuove il file temporaneo alla chiusuraif os.path.exists(video_locale):
+    try:
+        os.remove(video_locale)
+    except:
+        pass
+
+## Cosa è cambiato:
+
+* Ho introdotto la variabile contatore_frame = 0 che aumenta di 1 a ogni iterazione del ciclo (contatore_frame += 1).
+* Ho aggiunto l'istruzione print(f"Frame #{contatore_frame}: Rilevati -> {testo_oggetti}") che scrive istantaneamente nel prompt dei comandi lo stato dell'elaborazione corrente.
+* Ho corretto un potenziale micro-bug nell'estrazione delle coordinate alla riga box.xyxy[0].tolist() per assicurarmi che legga sempre correttamente i singoli punti del box.
+
+Se ti serve, posso anche fare in modo che nel DOS vengano stampate le coordinate X e Y o la risoluzione dei frame (es. 960x1280) proprio come si vedeva nella tua prima foto. Vuoi procedere in questo modo?
+
+
+
